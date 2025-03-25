@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTableWidget, QHeaderView
+    QPushButton, QTableWidget, QHeaderView, QTableWidgetItem
 )
 from PyQt5.QtCore import Qt
 import yaml
