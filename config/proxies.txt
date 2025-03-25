@@ -1,0 +1,2 @@
+http://user:pass@proxy1.com:8080  # HTTP proxy
+socks5://proxy2.com:1080          # SOCKS5 proxy

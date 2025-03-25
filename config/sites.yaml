@@ -1,0 +1,7 @@
+ebay_uk:
+  url: "https://www.ebay.co.uk"
+  search_path: "/sch/i.html?_nkw={query}"
+  selectors:
+    listings: "li.s-item"
+    title: "div.s-item__title"
+    price: "span.s-item__price"
