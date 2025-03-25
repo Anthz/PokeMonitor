@@ -1,46 +1,54 @@
-import aiohttp
-from aiohttp_proxy import ProxyConnector
 from bs4 import BeautifulSoup
-from fake_useragent import UserAgent
-from typing import List, Optional
-from ..models.listing import Listing
-from ..utils.proxy import proxy_manager
-from ..utils.logger import logger
+from .base_scraper import BaseScraper, ScrapeResult
+from typing import List, Dict
+import re
 
-class EbayScraper:
-    def __init__(self):
-        self.ua = UserAgent()
-    
-    async def fetch_listings(self, product_name: str) -> List[Listing]:
-        url = f"https://www.ebay.co.uk/sch/i.html?_nkw={product_name.replace(' ', '+')}"
-        headers = {"User-Agent": self.ua.random}
-        connector = proxy_manager.get_random_connector()  # Random proxy
+class EbayScraper(BaseScraper):
+    @property
+    def required_fields(self):
+        return {
+            **super().required_fields,
+            "listings_selector": {
+                "type": "str",
+                "default": "li.s-item",
+                "help": "CSS selector for product listings"
+            }
+        }
+
+    async def scrape(self, product_query: str) -> ScrapeResult:
+        url = f"{self.config['base_url']}/sch/i.html?_nkw={product_query}"
+        result = await self._request(url)
         
+        if not result.success:
+            return result
+
         try:
-            async with aiohttp.ClientSession(
-                connector=connector,
-                headers=headers
-            ) as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        logger.warning(f"Proxy failed. Status: {response.status}")
-                        return await self.fetch_listings(product_name)  # Retry
-                    
-                    html = await response.text()
-                    soup = BeautifulSoup(html, "html.parser")
-                    return self._parse_listings(soup)
-        
-        except Exception as e:
-            logger.error(f"Request failed: {e}")
-            return []
-
-    def _parse_listings(self, soup: BeautifulSoup) -> List[Listing]:
-        listings = []
-        for item in soup.select("li.s-item"):
-            title = item.select_one("span[role='heading']").text.strip()
-            price_text = item.select_one("span.s-item__price").text.strip()
-            price = float(price_text.replace("£", "").replace(",", ""))
-            url = item.select_one("a.s-item__link")["href"].split("?")[0]
+            soup = BeautifulSoup(result.data, 'html.parser')
+            listings = []
             
-            listings.append(Listing(title=title, price=price, url=url))
-        return listings
+            for item in soup.select(self.config['listings_selector']):
+                title_elem = item.select_one('span[role="heading"]')
+                price_elem = item.select_one('span.s-item__price')
+                
+                if not (title_elem and price_elem):
+                    continue
+                
+                price_text = re.sub(r'[^\d.]', '', price_elem.text)
+                
+                listings.append({
+                    'title': title_elem.text.strip(),
+                    'price': float(price_text),
+                    'url': item.select_one('a.s-item__link')['href']
+                })
+                
+            return ScrapeResult(
+                success=True,
+                data={'listings': listings},
+                error=None
+            )
+        except Exception as e:
+            return ScrapeResult(
+                success=False,
+                data=None,
+                error=f"Parsing failed: {str(e)}"
+            )
