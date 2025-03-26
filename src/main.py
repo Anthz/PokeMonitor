@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from gui.main_window import MainWindow
-from gui.theme import apply_theme
+from src.gui.main_window import MainWindow
+from src.gui.theme import apply_theme
 
 def main():
     app = QApplication(sys.argv)

@@ -4,51 +4,33 @@ from typing import List, Dict
 import re
 
 class EbayScraper(BaseScraper):
-    @property
-    def required_fields(self):
-        return {
-            **super().required_fields,
-            "listings_selector": {
-                "type": "str",
-                "default": "li.s-item",
-                "help": "CSS selector for product listings"
-            }
-        }
+    def __init__(self):
+        super().__init__()
+        self.debug = None  # Initialize debug attribute
 
     async def scrape(self, product_query: str) -> ScrapeResult:
-        url = f"{self.config['base_url']}/sch/i.html?_nkw={product_query}"
-        result = await self._request(url)
+        self.debug.log(f"Starting search for: {product_query}", 
+                     data={"query": product_query})
         
-        if not result.success:
-            return result
-
         try:
-            soup = BeautifulSoup(result.data, 'html.parser')
-            listings = []
+            url = self._build_search_url(product_query)
+            self.debug.log(f"Built search URL: {url}")
             
-            for item in soup.select(self.config['listings_selector']):
-                title_elem = item.select_one('span[role="heading"]')
-                price_elem = item.select_one('span.s-item__price')
+            result = await self._request(url)
+            if not result.success:
+                self.debug.log("Request failed", 
+                             level="error",
+                             data={"error": result.error})
+                return result
                 
-                if not (title_elem and price_elem):
-                    continue
-                
-                price_text = re.sub(r'[^\d.]', '', price_elem.text)
-                
-                listings.append({
-                    'title': title_elem.text.strip(),
-                    'price': float(price_text),
-                    'url': item.select_one('a.s-item__link')['href']
-                })
-                
-            return ScrapeResult(
-                success=True,
-                data={'listings': listings},
-                error=None
-            )
+            parsed = self._parse_listings(result.data)
+            self.debug.log(f"Found {len(parsed)} listings", 
+                         data={"sample": parsed[:1] if parsed else None})
+            
+            return ScrapeResult(success=True, data=parsed)
+            
         except Exception as e:
-            return ScrapeResult(
-                success=False,
-                data=None,
-                error=f"Parsing failed: {str(e)}"
-            )
+            self.debug.log("Scraping crashed", 
+                         level="critical",
+                         data={"exception": str(e)})
+            return ScrapeResult(success=False, error=str(e))
